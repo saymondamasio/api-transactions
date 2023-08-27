@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, test } from 'vitest'
 import request from 'supertest'
 import { app } from '../src/app'
 import { execSync } from 'node:child_process'
@@ -18,7 +18,7 @@ describe('Transactions routes', () => {
     execSync('npm run knex migrate:latest')
   })
 
-  test('user can create a new transaction', async () => {
+  it('user can create a new transaction', async () => {
     await request(app.server)
       .post('/transactions')
       .send({
@@ -29,7 +29,7 @@ describe('Transactions routes', () => {
       .expect(201)
   })
 
-  test('user can list all transactions', async () => {
+  it('user can list all transactions', async () => {
     const createTransactionResponse = await request(app.server)
       .post('/transactions')
       .send({
@@ -51,5 +51,65 @@ describe('Transactions routes', () => {
         amount: 100,
       }),
     ])
+  })
+
+  it('user get a specific transaction', async () => {
+    const createTransactionResponse = await request(app.server)
+      .post('/transactions')
+      .send({
+        title: 'Transaction Teste',
+        amount: 100,
+        type: 'credit',
+      })
+
+    const cookies = createTransactionResponse.get('Set-Cookie')
+
+    const listTransactionsResponse = await request(app.server)
+      .get('/transactions')
+      .set('Cookie', cookies)
+      .expect(200)
+
+    const transactionId = listTransactionsResponse.body.transactions[0].id
+
+    const getTransactionResponse = await request(app.server)
+      .get(`/transactions/${transactionId}`)
+      .set('Cookie', cookies)
+
+    expect(getTransactionResponse.body.transaction).toEqual(
+      expect.objectContaining({
+        title: 'Transaction Teste',
+        amount: 100,
+      }),
+    )
+  })
+
+  it('should be able to get the summary', async () => {
+    const createTransactionResponse = await request(app.server)
+      .post('/transactions')
+      .send({
+        title: 'Credit transaction',
+        amount: 1000,
+        type: 'credit',
+      })
+
+    const cookies = createTransactionResponse.get('Set-Cookie')
+
+    await request(app.server)
+      .post('/transactions')
+      .set('Cookie', cookies)
+      .send({
+        title: 'Debit transaction',
+        amount: -100,
+        type: 'credit',
+      })
+
+    const summaryResponse = await request(app.server)
+      .get('/transactions/summary')
+      .set('Cookie', cookies)
+      .expect(200)
+
+    expect(summaryResponse.body.summary).toEqual({
+      amount: 900,
+    })
   })
 })
